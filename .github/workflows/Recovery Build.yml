@@ -102,13 +102,14 @@ jobs:
       
     - name: Initialize repo
       run: |
-        mkdir workspace
+        export WORKSPACE="$(pwd)/workspace"
+        mkdir $WORKSPACE
         git config --global user.name "Captain Throwback"
         git config --global user.email "captainthrowback@hotmail.com"
         git clone ${{ github.event.inputs.SYNC_URL }} --depth=1 sync
         cd sync
-        ./orangefox_sync.sh --branch ${{ github.event.inputs.SYNC_BRANCH }} --path ../workspace
-        cd ../workspace
+        ./orangefox_sync.sh --branch ${{ github.event.inputs.SYNC_BRANCH }} --path $WORKSPACE
+        cd $WORKSPACE
         echo "::set-output name=pwd::$(pwd)"
       id: pwd
           
