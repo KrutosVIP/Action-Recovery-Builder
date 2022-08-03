@@ -3,14 +3,14 @@ name: Recovery Build
 on:
   workflow_dispatch:
     inputs:
-      MANIFEST_URL:
-        description: 'MANIFEST_URL (if using SSH keys, use git@github.com:repo URL format)'
+      SYNC_URL:
+        description: 'SYNC REPO URL (if using SSH keys, use git@github.com:repo URL format)'
         required: true
-        default: 'https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git'
-      MANIFEST_BRANCH:
-        description: 'MANIFEST_BRANCH'
+        default: 'https://gitlab.com/OrangeFox/sync.git'
+      SYNC_BRANCH:
+        description: 'SYNC_BRANCH'
         required: true
-        default: 'twrp-12.1'
+        default: '11.0'
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
         required: true
@@ -18,7 +18,7 @@ on:
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
-        default: 'fox_12.1_Q'
+        default: 'fox_11.0_R'
       DEVICE_PATH:
         description: 'DEVICE_PATH'
         required: true
@@ -51,8 +51,8 @@ jobs:
     - name: Display Run Parameters
       run: |
         echo "::group::User Environment Variables"
-        echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
-        echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
+        echo "Manifest URL: ${{ github.event.inputs.SYNC_URL }}"
+        echo "Manifest Branch: ${{ github.event.inputs.SYNC_BRANCH }}"
         echo "Device Tree URL: ${{ github.event.inputs.DEVICE_TREE_URL }}"
         echo "Device Tree Branch: ${{ github.event.inputs.DEVICE_TREE_BRANCH }}"
         echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
@@ -103,18 +103,15 @@ jobs:
     - name: Initialize repo
       run: |
         mkdir workspace
-        cd workspace
-        echo "::set-output name=pwd::$(pwd)"
         git config --global user.name "Captain Throwback"
         git config --global user.email "captainthrowback@hotmail.com"
-        repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+        git clone ${{ github.event.inputs.SYNC_URL }} --depth=1 sync
+        cd sync
+        ./orangefox_sync.sh --branch ${{ github.event.inputs.SYNC_BRANCH }} --path ../workspace
+        cd ../workspace
+        echo "::set-output name=pwd::$(pwd)"
       id: pwd
           
-    - name: Repo Sync
-      run: |
-        repo sync -j$(nproc --all) --force-sync
-      working-directory: workspace
-      
     - name: Clone device tree
       run: |
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
@@ -132,7 +129,7 @@ jobs:
       uses: haya14busa/action-cond@v1
       id: buildtree
       with:
-        cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' }}
+        cond: ${{ github.event.inputs.SYNC_BRANCH == '10.0' || github.event.inputs.SYNC_BRANCH == '11.0' || github.event.inputs.SYNC_BRANCH == '12.1' }}
         if_true: twrp
         if_false: omni
 
@@ -149,7 +146,7 @@ jobs:
         swap-size-gb: 12
 
     - name: Check Build Branch
-      if: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' }}
+      if: ${{ github.event.inputs.SYNC_BRANCH == 'twrp-12.1' }}
       run: |
         source build/envsetup.sh
         repopick 5405 5540
@@ -165,11 +162,13 @@ jobs:
     - name: Upload to Release
       uses: softprops/action-gh-release@v1
       with:
-        files: workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
-        name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
+        files: |
+          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
+          workspace/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/*.zip
+        name: OrangeFox ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
         tag_name: ${{ github.run_id }}
         body: |
-          Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
+          Sync Branch: ${{ github.event.inputs.SYNC_BRANCH }}
           Device: ${{ github.event.inputs.DEVICE_NAME }}
           Target: ${{ github.event.inputs.BUILD_TARGET }}.img
       env:
